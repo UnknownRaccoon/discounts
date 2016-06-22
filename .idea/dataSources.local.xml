@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="dataSourceStorageLocal">
+    <data-source name="Django default" uuid="295a8856-5c83-4736-8a80-806f9b5ff599">
+      <user-name>postgres</user-name>
+      <user-password>df9bdf98df98df9b</user-password>
+      <schema-pattern>discounts.pg_catalog discounts.public</schema-pattern>
+      <default-schemas>discounts.public</default-schemas>
+    </data-source>
+  </component>
+</project>
