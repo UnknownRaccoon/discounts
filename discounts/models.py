@@ -29,3 +29,6 @@ class Card(models.Model):
     company = models.ForeignKey(Company)
     number = models.CharField(max_length=50)
     type = models.SmallIntegerField(choices=TYPE_CHOICES)
+
+    def important_data(self):
+        return {'number': self.number, 'user': self.user.id, 'company': self.company.id, 'type': self.type}
