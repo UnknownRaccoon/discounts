@@ -1,3 +1,4 @@
+from discounts.helpers import user_is_company
 from django.db import models
 from django.contrib.auth.models import User
 
@@ -10,7 +11,11 @@ class Company(models.Model):
         return self.user.username
 
     def important_data(self):
-        return {'id':self.id, 'name': self.user.username, 'email': self.user.email, 'logo': self.logo or None}
+        return {'id': self.id,
+                'name': self.user.username.encode(),
+                'email': self.user.email,
+                'logo': self.logo or None
+                }
 
 
 class Address(models.Model):
@@ -31,4 +36,16 @@ class Card(models.Model):
     type = models.SmallIntegerField(choices=TYPE_CHOICES)
 
     def important_data(self):
-        return {'number': self.number, 'user': self.user.id, 'company': self.company.id, 'type': self.type}
+        return {'id': self.id,
+                'number': self.number,
+                'user': self.user.id,
+                'company': self.company.id,
+                'type': self.type,
+                }
+    def get_access_errors(self, user):
+        if user_is_company(user):
+            return 'Companies cannot manipulate cards'
+        elif user != self.user:
+            return 'Access denied'
+        else:
+            return None
