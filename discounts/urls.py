@@ -1,5 +1,5 @@
 from discounts.views import CardsIndexView, UsersIndexView, CardItemView, ResetPasswordView, NewPasswordView, SignUpView, \
-    UserItemView
+    UserItemView, AddressIndexView, AddressItemView
 from django.conf.urls import url
 from jwt_auth.views import obtain_jwt_token
 
@@ -12,4 +12,6 @@ urlpatterns = [
     url(r'^login/$', obtain_jwt_token, name='signin'),
     url(r'^reset/$', ResetPasswordView.as_view(), name='reset_start'),
     url(r'^reset-complete/$', NewPasswordView.as_view(), name='reset_complete'),
+    url(r'^companies/(?P<company_id>[0-9]+)/addresses/$', AddressIndexView.as_view(), name='addresses'),
+    url(r'^companies/(?P<company_id>[0-9]+)/addresses/(?P<address_id>[0-9]+)/$', AddressItemView.as_view(), name='address'),
 ]

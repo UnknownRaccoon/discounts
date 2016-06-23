@@ -1,6 +1,7 @@
 from discounts.helpers import user_is_company
 from django.db import models
 from django.contrib.auth.models import User
+from django.forms.models import model_to_dict
 
 
 class Company(models.Model):
@@ -14,8 +15,10 @@ class Company(models.Model):
         return {'id': self.id,
                 'name': self.user.username,
                 'email': self.user.email,
-                'logo': self.logo.url or None
+                'logo': self.logo.url or None,
+                'addresses': [model_to_dict(address) for address in self.address_set.all()]
                 }
+
 
 
 class Address(models.Model):
@@ -42,6 +45,7 @@ class Card(models.Model):
                 'company': self.company.id,
                 'type': self.type,
                 }
+
     def get_access_errors(self, user):
         if user_is_company(user):
             return 'Companies cannot manipulate cards'
@@ -49,6 +53,9 @@ class Card(models.Model):
             return 'Access denied'
         else:
             return None
+
+    class Meta:
+        unique_together = ('number', 'company')
 
 
 class PasswordReset(models.Model):

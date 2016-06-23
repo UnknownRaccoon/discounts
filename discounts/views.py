@@ -1,7 +1,7 @@
-from discounts.forms import SignUpForm, CardForm, CompanyForm
+from discounts.forms import SignUpForm, CardForm, CompanyForm, AddressForm
 from discounts.helpers import user_important_data, user_is_company, prepare_request
 from discounts.mixins import CSRFTokenNotRequiredMixin
-from discounts.models import Card, Company, PasswordReset
+from discounts.models import Card, Company, PasswordReset, Address
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.forms.models import model_to_dict
@@ -170,3 +170,57 @@ class NewPasswordView(CSRFTokenNotRequiredMixin, View):
         password_reset.used = True
         password_reset.save()
         return JsonResponse({}, status=204)
+
+
+class AddressItemView(JSONWebTokenAuthMixin, View):
+    def get(self, request, *args, **kwargs):
+        try:
+            address = Address.objects.get(pk=kwargs['address_id'])
+        except(Address.DoesNotExist):
+            return JsonResponse({'error': 'Address with given id does not exist'}, status=404)
+        return JsonResponse(model_to_dict(address))
+
+    def put(self, request, *args, **kwargs):
+        request.PUT = prepare_request(request, 'PUT')
+        address = Address.objects.get(pk=kwargs['address_id'])
+        if not user_is_company(request.user) or address not in request.user.company.address_set.all():
+            return JsonResponse({'error': 'Access denied'}, status=403)
+        request.PUT = request.PUT.copy()
+        request.PUT['company'] = request.user.company.id
+        values = model_to_dict(address)
+        values.update(request.PUT)
+        for k, v in values.items():
+            if k in request.PUT:
+                values[k] = v[0]
+        address_data = AddressForm(values, instance=address)
+        if address_data.is_valid():
+            address_data.save()
+            return JsonResponse({}, status=204)
+        return JsonResponse(address_data.errors, status=406)
+
+    def delete(self, request, *args, **kwargs):
+        request.DELETE = prepare_request(request, 'DELETE')
+        address = Address.objects.get(pk=kwargs['address_id'])
+        if not user_is_company(request.user) or address not in request.user.company.address_set.all():
+            return JsonResponse({'error': 'Access denied'}, status=403)
+        Address.objects.get(pk=kwargs['address_id']).delete()
+        return JsonResponse({}, status=204)
+
+
+class AddressIndexView(JSONWebTokenAuthMixin, View):
+    def get(self, request, *args, **kwargs):
+        addresses = Address.objects.filter(company_id=kwargs['company_id'])
+        data = {'addresses': [model_to_dict(item) for item in addresses]}
+        return JsonResponse(data)
+
+    def post(self, request, *args, **kwargs):
+        request.POST = request.POST.copy()
+        print(user_is_company(request.user), request.user.company.id, kwargs['company_id'])
+        if (not user_is_company(request.user)) or str(request.user.company.id) != kwargs['company_id']:
+            return JsonResponse({'error': 'Access denied'}, status=403)
+        request.POST['company'] = request.user.company.id
+        address_data = AddressForm(request.POST)
+        if address_data.is_valid():
+            created_address = address_data.save()
+            return JsonResponse(model_to_dict(created_address), status=201)
+        return JsonResponse(address_data.errors, status=406)

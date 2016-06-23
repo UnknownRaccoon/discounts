@@ -1,4 +1,4 @@
-from discounts.models import Card, Company
+from discounts.models import Card, Company, Address
 from django.contrib.auth.models import User
 from django.forms.models import ModelForm
 
@@ -18,4 +18,10 @@ class CardForm(ModelForm):
 class CompanyForm(ModelForm):
     class Meta:
         model = Company
+        fields = '__all__'
+
+
+class AddressForm(ModelForm):
+    class Meta:
+        model = Address
         fields = '__all__'
