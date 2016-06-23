@@ -3,7 +3,12 @@ def user_is_company(user):
 
 
 def user_important_data(user):
-    return {'id': user.id, 'phone': user.username, 'name': user.first_name, 'surname': user.last_name}
+    return {'id': user.id,
+            'phone': user.username,
+            'name': user.first_name,
+            'last_name': user.last_name,
+            'email': user.email,
+            }
 
 
 def prepare_request(request, valid_method):

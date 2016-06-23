@@ -76,7 +76,7 @@ class UserItemView(JSONWebTokenAuthMixin, View):
 class UsersIndexView(JSONWebTokenAuthMixin, View):
     def get(self, request, *args, **kwargs):
         if not user_is_company(request.user):
-            return JsonResponse({'error:' 'Access denied'})
+            return JsonResponse({'error': 'Access denied'}, status=403)
         else:
             users = [user_important_data(item) for item in User.objects.filter(card__company=request.user.company).distinct()]
             return JsonResponse({'users': users})
@@ -123,16 +123,15 @@ class CardItemView(JSONWebTokenAuthMixin, View):
         if access_errors is not None:
             return JsonResponse({'error': access_errors}, status=403)
         request.PUT = request.PUT.copy()
-        request.PUT = {k: v[0] for k, v in request.PUT.items()}
         request.PUT['user'] = request.user.id
         values = model_to_dict(card)
         values.update(request.PUT)
-        card_data = CardForm(values)
+        for k, v in values.items():
+            if k in request.PUT:
+                values[k] = v[0]
+        card_data = CardForm(values, instance=card)
         if card_data.is_valid():
-            created_card = card_data.save(commit=False)
-            created_card.id = card.id
-            card = created_card
-            card.save()
+            card_data.save()
             return JsonResponse({}, status=204)
         return JsonResponse(card_data.errors, status=406)
 
