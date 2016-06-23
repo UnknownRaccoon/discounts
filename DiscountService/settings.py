@@ -124,5 +124,12 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/1.9/howto/static-files/
 
 STATIC_URL = '/static/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = '/media/'
 
 JWT_EXPIRATION_DELTA = timedelta(minutes=10)
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = '465'
+EMAIL_HOST_USER = 'intersog.labs@gmail.com'
+EMAIL_HOST_PASSWORD = 'BynthcjuKf,c'
+EMAIL_USE_SSL = True

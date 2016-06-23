@@ -12,9 +12,9 @@ class Company(models.Model):
 
     def important_data(self):
         return {'id': self.id,
-                'name': self.user.username.encode(),
+                'name': self.user.username,
                 'email': self.user.email,
-                'logo': self.logo or None
+                'logo': self.logo.url or None
                 }
 
 
@@ -49,3 +49,10 @@ class Card(models.Model):
             return 'Access denied'
         else:
             return None
+
+
+class PasswordReset(models.Model):
+    user = models.ForeignKey(User)
+    token = models.CharField(max_length=64)
+    used = models.BooleanField(default=False)
+    generated_at = models.DateTimeField(auto_now_add=True)
