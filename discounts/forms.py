@@ -6,7 +6,7 @@ from django.forms.models import ModelForm
 class SignUpForm(ModelForm):
     class Meta:
         model = User
-        fields = ['username', 'password', 'email']
+        fields = ['username', 'password', 'email', 'first_name', 'last_name']
 
 
 class CardForm(ModelForm):
@@ -18,7 +18,7 @@ class CardForm(ModelForm):
 class CompanyForm(ModelForm):
     class Meta:
         model = Company
-        fields = '__all__'
+        fields = ['logo']
 
 
 class AddressForm(ModelForm):

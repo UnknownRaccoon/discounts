@@ -20,7 +20,6 @@ class Company(models.Model):
                 }
 
 
-
 class Address(models.Model):
     address = models.CharField(max_length=100)
     company = models.ForeignKey(Company, on_delete=models.CASCADE)

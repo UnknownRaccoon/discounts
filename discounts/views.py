@@ -1,3 +1,4 @@
+import re
 from discounts.forms import SignUpForm, CardForm, CompanyForm, AddressForm
 from discounts.helpers import user_important_data, user_is_company, prepare_request
 from discounts.mixins import CSRFTokenNotRequiredMixin
@@ -24,6 +25,8 @@ class SignUpView(CSRFTokenNotRequiredMixin, View):
         except(ValueError, TypeError):
             return JsonResponse({'error': 'Role field must be specified and valid'}, status=406)
         if user_data.is_valid():
+            if not re.match(r'\+\d{9,15}', user_data.cleaned_data['username']) and role == 0:
+                return JsonResponse({'error': 'Username must be valid phone number'}, status=406)
             created_user = User.objects.create_user(user_data.cleaned_data['username'],
                                                     user_data.cleaned_data['email'],
                                                     user_data.cleaned_data['password'])
@@ -39,38 +42,38 @@ class SignUpView(CSRFTokenNotRequiredMixin, View):
 class UserItemView(JSONWebTokenAuthMixin, View):
     def get(self, request, *args, **kwargs):
         try:
-            user = User.objects.get(pk=kwargs['user_id'])
+            user = User.objects.get(pk=kwargs['user_id'], company__isnull=True)
         except(User.DoesNotExist):
             return JsonResponse({'error': 'User does not exist'}, status=404)
-        if user_is_company(user):
-            return JsonResponse(user.company.important_data())
-        elif user_is_company(request.user) and\
+        if user_is_company(request.user) and\
                         user not in User.objects.filter(card__company=request.user.company).distinct() or\
                                 user != request.user and not user_is_company(request.user):
                 return JsonResponse({'error': 'Access denied'}, status=403)
         return JsonResponse(user_important_data(user))
 
+
+class AccountControlView(JSONWebTokenAuthMixin, View):
+    def get(self, request, *args, **kwargs):
+        return JsonResponse(user_important_data(request.user))
+
     def put(self, request, *args, **kwargs):
         request.PUT = prepare_request(request, 'PUT')
-        user = User.objects.get(pk=kwargs['user_id'])
-        if user != request.user:
-            return JsonResponse({'error': 'Access denied'}, status=403)
-        request.PUT = request.PUT.copy()
-        request.PUT['user'] = request.user.id
-        values = model_to_dict(user)
-        values.update(request.PUT)
-        for k, v in values.items():
-            if k in request.PUT:
-                values[k] = v[0]
-        user_data = SignUpForm(values, files=request.FILES, instance=user)
+        values = model_to_dict(request.user)
+        values.update({key: value for key, value in request.PUT.items()})
+        user_data = SignUpForm(values, files=request.FILES, instance=request.user)
         if user_data.is_valid():
+            if not re.match(r'\+\d{9,15}', user_data.cleaned_data['username']) and user_is_company(request.user):
+                return JsonResponse({'error': 'Username must be valid phone number'}, status=406)
             user_data.save()
-            if user_is_company(user):
-                company_data = CompanyForm(values, files=request.FILES, instance=user.company)
+            if user_is_company(request.user):
+                company_data = CompanyForm(values, files=request.FILES, instance=request.user.company)
                 if company_data.is_valid():
                     company_data.save()
-            return JsonResponse({}, status=204)
-        return JsonResponse({'errors': user_data.errors})
+                    return JsonResponse({}, status=204)
+                user_data.errors.update(company_data.errors)
+            else:
+                return JsonResponse({}, status=204)
+        return JsonResponse({'errors': user_data.errors}, status=406)
 
 
 class UsersIndexView(JSONWebTokenAuthMixin, View):
@@ -78,7 +81,7 @@ class UsersIndexView(JSONWebTokenAuthMixin, View):
         if not user_is_company(request.user):
             return JsonResponse({'error': 'Access denied'}, status=403)
         else:
-            users = [user_important_data(item) for item in User.objects.filter(card__company=request.user.company).distinct()]
+            users = [user_important_data(user) for user in User.objects.filter(card__company=request.user.company).distinct()]
             return JsonResponse({'users': users})
 
 
@@ -88,8 +91,8 @@ class CardsIndexView(JSONWebTokenAuthMixin, View):
             cards = Card.objects.filter(company=request.user.company)
         else:
             cards = Card.objects.filter(user=request.user)
-        data = {'cards': [item.important_data() for item in cards]}
-        return JsonResponse(data)
+        cards = [item.important_data() for item in cards]
+        return JsonResponse({'cards': cards})
 
     def post(self, request, *args, **kwargs):
         request.POST = request.POST.copy()
@@ -117,18 +120,18 @@ class CardItemView(JSONWebTokenAuthMixin, View):
         return JsonResponse(model_to_dict(card))
 
     def put(self, request, *args, **kwargs):
-        request.PUT = prepare_request(request, 'PUT')
-        card = Card.objects.get(pk=kwargs['card_id'])
+        try:
+            card = Card.objects.get(pk=kwargs['card_id'])
+        except Card.DoesNotExist:
+            return JsonResponse({'error': 'Card with given id does not exist'}, status=404)
         access_errors = card.get_access_errors(request.user)
         if access_errors is not None:
             return JsonResponse({'error': access_errors}, status=403)
+        request.PUT = prepare_request(request, 'PUT')
         request.PUT = request.PUT.copy()
         request.PUT['user'] = request.user.id
         values = model_to_dict(card)
-        values.update(request.PUT)
-        for k, v in values.items():
-            if k in request.PUT:
-                values[k] = v[0]
+        values.update({key: value for key, value in request.PUT.items()})
         card_data = CardForm(values, instance=card)
         if card_data.is_valid():
             card_data.save()
@@ -136,8 +139,10 @@ class CardItemView(JSONWebTokenAuthMixin, View):
         return JsonResponse(card_data.errors, status=406)
 
     def delete(self, request, *args, **kwargs):
-        request.DELETE = prepare_request(request, 'DELETE')
-        card = Card.objects.get(pk=kwargs['card_id'])
+        try:
+            card = Card.objects.get(pk=kwargs['card_id'])
+        except Card.DoesNotExist:
+            return JsonResponse({'error': 'Card with given id does not exist'}, status=404)
         access_errors = card.get_access_errors(request.user)
         if access_errors is not None:
             return JsonResponse({'error': access_errors}, status=403)
@@ -181,17 +186,17 @@ class AddressItemView(JSONWebTokenAuthMixin, View):
         return JsonResponse(model_to_dict(address))
 
     def put(self, request, *args, **kwargs):
-        request.PUT = prepare_request(request, 'PUT')
-        address = Address.objects.get(pk=kwargs['address_id'])
+        try:
+            address = Address.objects.get(pk=kwargs['address_id'])
+        except Address.DoesNotExist:
+            return JsonResponse({'error': 'Address with given id does not exist'}, status=404)
         if not user_is_company(request.user) or address not in request.user.company.address_set.all():
             return JsonResponse({'error': 'Access denied'}, status=403)
+        request.PUT = prepare_request(request, 'PUT')
         request.PUT = request.PUT.copy()
         request.PUT['company'] = request.user.company.id
         values = model_to_dict(address)
-        values.update(request.PUT)
-        for k, v in values.items():
-            if k in request.PUT:
-                values[k] = v[0]
+        values.update({key: value for key, value in request.PUT.items()})
         address_data = AddressForm(values, instance=address)
         if address_data.is_valid():
             address_data.save()
@@ -199,28 +204,44 @@ class AddressItemView(JSONWebTokenAuthMixin, View):
         return JsonResponse(address_data.errors, status=406)
 
     def delete(self, request, *args, **kwargs):
-        request.DELETE = prepare_request(request, 'DELETE')
-        address = Address.objects.get(pk=kwargs['address_id'])
+        try:
+            address = Address.objects.get(pk=kwargs['address_id'])
+        except Address.DoesNotExist:
+            return JsonResponse({'error': 'Address with given id does not exist'}, status=404)
         if not user_is_company(request.user) or address not in request.user.company.address_set.all():
             return JsonResponse({'error': 'Access denied'}, status=403)
-        Address.objects.get(pk=kwargs['address_id']).delete()
+        address.delete()
         return JsonResponse({}, status=204)
 
 
 class AddressIndexView(JSONWebTokenAuthMixin, View):
     def get(self, request, *args, **kwargs):
         addresses = Address.objects.filter(company_id=kwargs['company_id'])
-        data = {'addresses': [model_to_dict(item) for item in addresses]}
+        data = {'addresses': [model_to_dict(address) for address in addresses]}
         return JsonResponse(data)
 
     def post(self, request, *args, **kwargs):
-        request.POST = request.POST.copy()
-        print(user_is_company(request.user), request.user.company.id, kwargs['company_id'])
-        if (not user_is_company(request.user)) or str(request.user.company.id) != kwargs['company_id']:
+        if not user_is_company(request.user) or str(request.user.company.id) != kwargs['company_id']:
             return JsonResponse({'error': 'Access denied'}, status=403)
+        request.POST = request.POST.copy()
         request.POST['company'] = request.user.company.id
         address_data = AddressForm(request.POST)
         if address_data.is_valid():
             created_address = address_data.save()
             return JsonResponse(model_to_dict(created_address), status=201)
         return JsonResponse(address_data.errors, status=406)
+
+
+class CompaniesIndexView(JSONWebTokenAuthMixin, View):
+    def get(self, request, *args, **kwargs):
+        companies = [company.important_data() for company in Company.objects.all()]
+        return JsonResponse({'companies': companies})
+
+
+class CompanyItemView(JSONWebTokenAuthMixin, View):
+    def get(self, request, *args, **kwargs):
+        try:
+            company = Company.objects.get(pk=kwargs['company_id'])
+            return JsonResponse({'company': company.important_data()})
+        except Company.DoesNotExist:
+            return JsonResponse({'error': 'Company with given id does not exist'}, status=404)
